@@ -1,0 +1,106 @@
+.testimonial-bubble {
+  width: 300px;
+  max-width: 80vw;
+  pointer-events: auto;
+  animation: fadeIn 0.3s ease-out;
+  transition: width 0.3s ease, max-height 0.3s ease;
+}
+
+.testimonial-bubble.expanded {
+  width: 400px;
+  max-width: 80vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: expandContent 0.3s ease-out;
+}
+
+.testimonial-content {
+  background-color: white;
+  color: #333;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.testimonial-text {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  font-style: italic;
+  transition: max-height 0.3s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.expanded .testimonial-text {
+  line-height: 1.6;
+  transition: all 0.3s ease;
+}
+
+.testimonial-expand-button {
+  background: none;
+  border: none;
+  color: #4a90e2;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 10px;
+  text-decoration: underline;
+  display: block;
+  text-align: right;
+}
+
+.testimonial-expand-button:hover {
+  color: #2a6fc7;
+}
+
+.testimonial-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #777;
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+.testimonial-disease {
+  font-weight: bold;
+}
+
+.testimonial-location {
+  font-style: italic;
+}
+
+.testimonial-arrow {
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 12px solid white;
+  margin: 0 auto;
+}
+
+/* Animation for testimonial bubble appearance */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+/* Animation for content expansion */
+@keyframes expandContent {
+  from {
+    max-height: 200px;
+    opacity: 0.9;
+  }
+  to {
+    max-height: 80vh;
+    opacity: 1;
+  }
+} 
