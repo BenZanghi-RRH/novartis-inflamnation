@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react'; // Removed useCallback
 import DeckGL from '@deck.gl/react';
 import { Map as ReactMapGLMap } from 'react-map-gl';
 import { ScatterplotLayer } from '@deck.gl/layers'; // TextLayer removed
@@ -8,6 +8,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'; // Import Mapbox CSS
 import './Map.css';
 import { getDiseaseColor, POINT_SIZES } from '../../utils/diseaseMappings';
 import Testimonial from '../Testimonial/Testimonial';
+import ChatterPopup from '../ChatterPopup/ChatterPopup'; // Import the new component
 
 // Viewport settings centered on the US
 const INITIAL_VIEW_STATE = {
@@ -49,9 +50,15 @@ function MapComponent({ filteredData, activeFilters }) { // Use filteredData, re
     transitionInterpolator: new FlyToInterpolator(),
     transitionEasing: t => t * (2 - t)
   });
-  const [animationTime, setAnimationTime] = useState(0); // State for animation
+  const [animationTime, setAnimationTime] = useState(0); // State for heatmap animation
+  const [chatterState, setChatterState] = useState({ // State for chatter popup
+    testimonial: null,
+    coordinates: null, // Store geographic coordinates
+    position: null,    // Store calculated screen position
+    key: null,         // To force re-render/reset animation
+  });
   // const [clusteredData, setClusteredData] = useState([]); // No longer using clustered data directly for heatmap
-  const [testimonialState, setTestimonialState] = useState({
+  const [testimonialState, setTestimonialState] = useState({ // State for clicked testimonial
     data: null,
     position: null,
     coordinates: null, // Geographic coordinates [longitude, latitude]
@@ -111,6 +118,74 @@ function MapComponent({ filteredData, activeFilters }) { // Use filteredData, re
     animate(); // Start the animation
     return () => cancelAnimationFrame(animationFrameId); // Cleanup on unmount
   }, []);
+
+  // Timer for triggering chatter popups
+  useEffect(() => {
+    const CHATTER_INTERVAL = 7000; // milliseconds (7 seconds)
+    let chatterTimeoutId;
+
+    const triggerChatter = () => {
+      if (deckRef.current && filteredData && filteredData.length > 0) {
+        const viewport = deckRef.current.deck.getViewports()[0];
+        if (!viewport) return; // Exit if viewport isn't ready
+
+        // Select a random testimonial from the currently filtered data
+        const randomIndex = Math.floor(Math.random() * filteredData.length);
+        const randomTestimonial = filteredData[randomIndex];
+
+        // Project its coordinates to screen position
+        const [x, y] = viewport.project(randomTestimonial.geometry.coordinates);
+
+        // Only show if the projected point is reasonably within the current view
+        // Add some buffer around the edges
+        const buffer = 50;
+        if (x > -buffer && x < viewport.width + buffer && y > -buffer && y < viewport.height + buffer) {
+          setChatterState({
+            testimonial: randomTestimonial.properties, // Pass properties object
+            coordinates: randomTestimonial.geometry.coordinates, // Store coordinates
+            position: { x, y }, // Initial screen position
+            key: randomTestimonial.properties.testimonialId || Date.now(), // Use ID or timestamp as key
+          });
+        } else {
+          // If point is off-screen, try again sooner
+           clearTimeout(chatterTimeoutId);
+           chatterTimeoutId = setTimeout(triggerChatter, CHATTER_INTERVAL / 2); // Try again faster
+           return; // Don't schedule the next full interval yet
+        }
+      }
+       // Schedule the next chatter popup
+       chatterTimeoutId = setTimeout(triggerChatter, CHATTER_INTERVAL);
+    };
+
+    // Start the first timer
+    chatterTimeoutId = setTimeout(triggerChatter, CHATTER_INTERVAL);
+
+    // Cleanup function
+    return () => clearTimeout(chatterTimeoutId);
+
+  }, [filteredData]); // Rerun effect if filteredData changes
+
+  // // Callback to clear chatter state when popup completes - REMOVED
+  // const handleChatterComplete = useCallback(() => {
+  //   setChatterState({ testimonial: null, position: null, key: null });
+  // }, []);
+
+  // Effect to update chatter popup position when viewState changes
+  useEffect(() => {
+    if (chatterState.coordinates && chatterState.testimonial && deckRef.current) {
+      const viewport = deckRef.current.deck.getViewports()[0];
+      if (viewport) {
+        // Re-project the geographic coordinates to screen coordinates
+        const [x, y] = viewport.project(chatterState.coordinates);
+        // Update only the position part of the state
+        setChatterState(prevState => ({
+          ...prevState,
+          position: { x, y }
+        }));
+      }
+    }
+    // If chatter becomes null, position will be irrelevant anyway
+  }, [viewState, chatterState.coordinates, chatterState.testimonial]); // Depend on viewState and chatter coordinates/testimonial
 
   // Handle click on a testimonial to show the full testimonial
   const handleClick = (info) => {
@@ -400,6 +475,16 @@ function MapComponent({ filteredData, activeFilters }) { // Use filteredData, re
           position={testimonialState.position}
           isAtEdge={testimonialState.isAtEdge}
           edgeDirection={testimonialState.edgeDirection}
+         />
+      )}
+
+      {/* Render the Chatter Popup */}
+      {chatterState.testimonial && (
+        <ChatterPopup
+          key={chatterState.key} // Force re-render/reset animation
+          testimonial={chatterState.testimonial}
+          position={chatterState.position}
+          // onComplete={handleChatterComplete} // REMOVED prop
         />
       )}
     </div>

@@ -2,8 +2,22 @@
   width: 300px;
   max-width: 80vw;
   pointer-events: auto;
-  animation: fadeIn 0.3s ease-out;
-  transition: width 0.3s ease, max-height 0.3s ease;
+  transition: all 0.3s ease;
+  will-change: transform, width, max-height, background-color;
+  animation: appearFromClick 0.3s ease-out;
+}
+
+.testimonial-bubble.preview-mode {
+  display: none; /* Hide preview mode entirely */
+}
+
+/* Animation states */
+.testimonial-bubble.animating {
+  animation: previewToFull 0.3s ease-out forwards;
+}
+
+.testimonial-bubble.transitioning {
+  transition: all 0.3s ease-out;
 }
 
 .testimonial-bubble.expanded {
@@ -11,7 +25,20 @@
   max-width: 80vw;
   max-height: 80vh;
   overflow-y: auto;
-  animation: expandContent 0.3s ease-out;
+}
+
+/* When testimonial is at edge of screen, add a glow effect to indicate it */
+.testimonial-bubble.at-edge {
+  animation: edgeGlow 1.5s infinite alternate;
+}
+
+@keyframes edgeGlow {
+  from {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+  to {
+    box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.7);
+  }
 }
 
 .testimonial-content {
@@ -20,6 +47,15 @@
   padding: 16px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  transform-origin: center bottom;
+}
+
+.testimonial-content.preview-content {
+  background-color: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .testimonial-text {
@@ -30,6 +66,13 @@
   transition: max-height 0.3s ease;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.preview-content .testimonial-text {
+  font-size: 12px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  opacity: 0.9;
 }
 
 .expanded .testimonial-text {
@@ -64,12 +107,29 @@
   padding-top: 10px;
 }
 
+.preview-content .testimonial-info {
+  border-top-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .testimonial-disease {
   font-weight: bold;
 }
 
 .testimonial-location {
   font-style: italic;
+}
+
+.edge-indicator {
+  background-color: rgba(255, 200, 0, 0.2);
+  color: #ff9800;
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  text-align: center;
+  font-weight: bold;
+  border: 1px solid rgba(255, 152, 0, 0.3);
 }
 
 .testimonial-arrow {
@@ -79,6 +139,19 @@
   border-right: 10px solid transparent;
   border-top: 12px solid white;
   margin: 0 auto;
+  transition: border-color 0.3s ease;
+}
+
+.testimonial-arrow.preview-arrow {
+  border-top-color: rgba(0, 0, 0, 0.75);
+}
+
+.testimonial-preview-hint {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.7;
+  font-style: italic;
+  text-align: center;
 }
 
 /* Animation for testimonial bubble appearance */
@@ -89,7 +162,33 @@
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -100%);
+    transform: translate(-50%, -130%);
+  }
+}
+
+/* Animation for testimonial appearance directly from click */
+@keyframes appearFromClick {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+/* Animation for preview to full transition */
+@keyframes previewToFull {
+  0% {
+    background-color: rgba(0, 0, 0, 0.75);
+    transform: translate(-50%, -130%) scale(0.95);
+    opacity: 0.9;
+  }
+  100% {
+    background-color: white;
+    transform: translate(-50%, -100%) scale(1);
+    opacity: 1;
   }
 }
 

@@ -10,9 +10,11 @@ function App() {
     isLoading, 
     error, 
     diseaseTypes, 
-    activeFilters, 
+    activeFilters,
     toggleDiseaseFilter,
-    filteredClusterIndex
+    filteredClusterIndex,
+    filteredData, // Get the raw filtered points
+    classificationCounts // Get the counts from the hook
   } = useData();
 
   if (isLoading) {
@@ -25,14 +27,16 @@ function App() {
 
   return (
     <div className="app">
-      <FilterPanel 
+      <FilterPanel
         diseaseTypes={diseaseTypes}
         activeFilters={activeFilters}
         onToggleFilter={toggleDiseaseFilter}
+        counts={classificationCounts} // Pass counts as a prop
       />
       <StatisticsPanel activeFilters={activeFilters} />
-      <MapComponent 
-        filteredClusterIndex={filteredClusterIndex}
+      <MapComponent
+        filteredClusterIndex={filteredClusterIndex} // Keep for now, might remove later
+        filteredData={filteredData} // Pass the raw filtered points
         activeFilters={activeFilters}
       />
     </div>

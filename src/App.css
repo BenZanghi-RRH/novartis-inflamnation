@@ -48,12 +48,12 @@ body,
   position: relative;
 }
 
-/* Make sure map component takes full size */
+/* Make sure map component takes full size and accounts for wider filter panel */
 .app > div:last-child {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 100%;
+  left: 320px; /* Match the new filter panel width */
+  width: calc(100% - 320px); /* Adjust width to account for filter panel */
   height: 100%;
 }
 

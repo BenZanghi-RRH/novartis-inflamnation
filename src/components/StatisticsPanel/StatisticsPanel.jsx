@@ -85,7 +85,7 @@ function StatisticsPanel({ activeFilters }) {
 
   return (
     <div className="statistics-panel">
-      <h2>Vital statistics</h2>
+      <h2>Vital Statistics</h2>
       <div className="stat-container">
         <div className="stat-highlight">{stats.prevalence}</div>
         <div className="stat-description">{stats.description}</div>

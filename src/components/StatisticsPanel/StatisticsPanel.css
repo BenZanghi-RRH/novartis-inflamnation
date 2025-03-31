@@ -2,13 +2,26 @@
   position: fixed;
   bottom: 40px;
   right: 40px;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.6);
   color: white;
   padding: 20px;
   border-radius: 8px;
   max-width: 300px;
   z-index: 10;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  
+  transition: all 0.3s ease;
+}
+
+@supports not (backdrop-filter: blur(8px)) {
+  .statistics-panel {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
 }
 
 .statistics-panel h2 {

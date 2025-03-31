@@ -3,14 +3,27 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 280px;
-  background-color: rgba(0, 0, 0, 0.8);
+  width: 360px; /* Increased width */
+  background-color: rgba(10, 20, 30, 0.7); /* Slightly increased opacity for uniformity */
   color: white;
   display: flex;
   flex-direction: column;
   padding: 20px;
   z-index: 10;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+  
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  
+  transition: all 0.3s ease;
+}
+
+@supports not (backdrop-filter: blur(8px)) {
+  .filter-panel {
+    background-color: rgba(10, 20, 30, 0.85);
+  }
 }
 
 .filter-header {
@@ -18,9 +31,10 @@
 }
 
 .filter-header h1 {
-  font-size: 26px;
+  font-size: 24px;
   margin: 0;
   margin-bottom: 10px;
+  white-space: nowrap;
 }
 
 .filter-summary {
@@ -64,20 +78,42 @@
   width: 100%;
   font-size: 16px;
   cursor: pointer;
-  padding: 8px 0;
-  background-color: rgba(60, 60, 60, 0.5);
+  padding: 8px 12px; /* Adjusted padding slightly */
+  background-color: rgb(30, 40, 50); /* Made filter label background solid */
   border-radius: 25px;
-  padding: 8px 16px;
   transition: all 0.3s ease;
+  /* Removed backdrop-filter from individual labels */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Slightly more visible border */
 }
 
+/* Span containing the disease name text */
+.filter-label-text {
+  flex-grow: 1; /* Allow text to take available space */
+  margin-right: 8px; /* Space between text and count/toggle */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Style for the count indicator */
+.filter-count {
+  font-size: 0.85em; /* Slightly smaller */
+  color: #a0a0a0;  /* Greyish color */
+  font-weight: 400; /* Normal weight */
+  margin-right: 8px; /* Space between count and toggle */
+  flex-shrink: 0; /* Prevent count from shrinking */
+}
+
+
 .filter-label:hover {
-  background-color: rgba(80, 80, 80, 0.6);
+  background-color: rgb(40, 50, 60); /* Solid hover background */
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .filter-label.active-filter {
-  background-color: rgba(42, 94, 46, 0.3);
+  background-color: rgb(42, 94, 46); /* Solid active background */
   border-left: 4px solid #4caf50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5); /* Slightly stronger shadow */
 }
 
 /* Active filter styling */
@@ -93,8 +129,10 @@
   text-align: center;
   border-radius: 20px;
   height: 28px;
-  background-color: #333;
-  transition: background-color 0.3s;
+  background-color: rgb(20, 30, 40); /* Solid background for toggle */
+  transition: all 0.3s ease;
+  /* Removed backdrop-filter from toggle */
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .toggle-switch input {
@@ -121,48 +159,16 @@
 }
 
 .toggle-switch.active {
-  background-color: #2f9b2f;
+  background-color: rgb(47, 155, 47); /* Solid active background */
   box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+  border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
 .toggle-switch.inactive {
-  background-color: #555;
+  background-color: rgb(50, 60, 70); /* Solid inactive background */
 }
 
-.menu-button {
-  display: flex;
-  align-items: center;
-  color: white;
-  padding: 10px 0;
-  cursor: pointer;
-  margin-top: auto;
-  font-weight: bold;
-  background-color: #ff3b3b;
-  border-radius: 4px;
-  justify-content: center;
-  padding: 10px;
+/* Ensure toggle switch doesn't shrink */
+.toggle-switch {
+  flex-shrink: 0;
 }
-
-.menu-button:hover {
-  background-color: #e62c2c;
-}
-
-.menu-icon {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 20px;
-  height: 16px;
-  margin-right: 10px;
-}
-
-.menu-icon span {
-  display: block;
-  height: 2px;
-  background-color: white;
-  width: 100%;
-}
-
-.menu-text {
-  letter-spacing: 1px;
-} 

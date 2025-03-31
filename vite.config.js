@@ -12,5 +12,8 @@ export default defineConfig({
     alias: {
       'react-map-gl': 'react-map-gl/dist/esm/index.js'
     }
+  },
+  server: {
+    allowedHosts: ['chronicconnections.loclx.io']
   }
 })

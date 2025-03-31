@@ -4,41 +4,22 @@ import { geoCentroid } from 'd3-geo';
 import Supercluster from 'supercluster';
 
 const COUNTY_DATA_URL = '/counties-10m.json'; // Assuming it's in the public folder
-const TESTIMONIAL_DATA_URL = '/data.json'; // Assuming it's in the public folder
+const TESTIMONIAL_DATA_URL = '/data-2.json'; // UPDATED data source
 
-// Define the target disease list with normalized names
-const TARGET_DISEASES = [
+// Define the target classification categories used in data-2.json
+// Exclude 'Other' as it's usually not a filter option.
+const TARGET_CLASSIFICATIONS = [
   'Ankylosing Spondylitis',
   'Hidradenitis Suppurativa',
-  'Multiple Sclerosis',
-  'Asthma',
+  'Plaque Psoriasis',
+  'Psoriatic Arthritis',
   'Breast Cancer',
-  'Diabetes',
   'Heart Disease',
-  'Hypertension',
-  'Migraine'
+  "Sjögren's Syndrome",
+  // 'Other' - Typically excluded from filters
 ];
 
-// Helper function to normalize and map disease names to target diseases
-function normalizeDiseaseName(diseaseName) {
-  if (!diseaseName) return 'Unknown condition';
-  
-  const name = diseaseName.trim().toLowerCase();
-  
-  // Map similar or partial matches to the target disease names
-  if (name.includes('ankylos') || name.includes('spondyl')) return 'Ankylosing Spondylitis';
-  if (name.includes('hidra') || name.includes('suppura')) return 'Hidradenitis Suppurativa';
-  if (name.includes('multiple') || name.includes('ms') || name.includes('sclerosis')) return 'Multiple Sclerosis';
-  if (name.includes('asthma')) return 'Asthma';
-  if (name.includes('breast') && name.includes('cancer')) return 'Breast Cancer';
-  if (name.includes('diabet') || name.includes('type 1') || name.includes('type 2')) return 'Diabetes';
-  if (name.includes('heart') || name.includes('cardiac') || name.includes('cardiovascular')) return 'Heart Disease';
-  if (name.includes('hypert') || name.includes('blood pressure') || name.includes('hbp')) return 'Hypertension';
-  if (name.includes('migraine') || name.includes('headache')) return 'Migraine';
-  
-  // If no match is found, return "Other"
-  return 'Other';
-}
+// Removed normalizeDiseaseName function as classification is pre-computed
 
 export function useData() {
   const [data, setData] = useState(null);
@@ -51,6 +32,7 @@ export function useData() {
   const [activeFilters, setActiveFilters] = useState({});
   const [filteredData, setFilteredData] = useState(null);
   const [filteredClusterIndex, setFilteredClusterIndex] = useState(null);
+  const [classificationCounts, setClassificationCounts] = useState({}); // State for counts
 
   // Initialize data and extract disease types
   useEffect(() => {
@@ -93,13 +75,15 @@ export function useData() {
 
         // --- Process Testimonial Data for Clustering ---
         const points = [];
-        const diseaseCountMap = {};
-        
-        // Initialize disease count map with target diseases
-        TARGET_DISEASES.forEach(disease => {
-          diseaseCountMap[disease] = 0;
+        const classificationCountMap = {}; // Use classification instead of disease
+
+        // Initialize classification count map
+        TARGET_CLASSIFICATIONS.forEach(classification => {
+          classificationCountMap[classification] = 0;
         });
-        
+        // Add 'Other' manually if we want to track it, though it might not be filterable
+        classificationCountMap['Other'] = 0;
+
         Object.values(testimonialData).forEach((countyInfo, index) => {
           const fips = countyInfo.county;
           const coordinates = countyCentroids[fips];
@@ -108,21 +92,26 @@ export function useData() {
             const processVerbatims = (verbatims, sentiment) => {
               if (verbatims && Array.isArray(verbatims)) {
                 verbatims.forEach((item, testimonialIndex) => {
-                  // Normalize disease name to match target list
-                  const normalizedDisease = normalizeDiseaseName(item.disease);
-                  
-                  // Count occurrences of each disease
-                  if (TARGET_DISEASES.includes(normalizedDisease)) {
-                    diseaseCountMap[normalizedDisease] = (diseaseCountMap[normalizedDisease] || 0) + 1;
+                  // Use the pre-computed classification field
+                  const classification = item.classification || 'Other'; // Default to 'Other' if missing
+
+                  // Count occurrences of each classification (using safer hasOwnProperty check)
+                  if (Object.prototype.hasOwnProperty.call(classificationCountMap, classification)) {
+                     classificationCountMap[classification]++;
+                  } else {
+                     // This case shouldn't happen if classification script worked correctly
+                     // but good to handle. Maybe add to 'Other'?
+                     classificationCountMap['Other']++;
+                     console.warn(`Unexpected classification found: ${classification}`);
                   }
-                  
+
                   points.push({
                     type: 'Feature',
                     properties: {
                       cluster: false,
                       testimonialId: `${fips}-${index}-${testimonialIndex}`,
                       category: sentiment === 'positive' ? 'positive' : 'negative',
-                      disease: normalizedDisease,
+                      disease: classification, // Use classification here (consistent naming)
                       text: item.nn_verbatim,
                       county: countyInfo.county_name,
                     },
@@ -145,23 +134,24 @@ export function useData() {
           }
         });
 
-        // Only include target diseases that have data points
-        const availableDiseases = TARGET_DISEASES.filter(disease => 
-          diseaseCountMap[disease] > 0
+        // Determine available classifications (excluding 'Other' for filtering)
+        const availableClassifications = TARGET_CLASSIFICATIONS.filter(cls =>
+          classificationCountMap[cls] > 0
         );
-        
+
         // Initialize all filters to off by default
         const initialFilters = {};
-        availableDiseases.forEach(disease => {
-          initialFilters[disease] = false;
+        availableClassifications.forEach(cls => {
+          initialFilters[cls] = false;
         });
 
         setGeoData(countiesGeoJson);
         setTestimonialData(points);
         setData(points); // Set the processed points as the main data
-        setDiseaseTypes(availableDiseases);
+        setDiseaseTypes(availableClassifications); // Use classifications for filter types
         setActiveFilters(initialFilters);
-        
+        setClassificationCounts(classificationCountMap); // Store the counts
+
         // Initialize with empty filtered data since all filters are off by default
         setFilteredData([]);
 
@@ -183,10 +173,10 @@ export function useData() {
         emptyIndex.load([]);
         setFilteredClusterIndex(emptyIndex);
 
-        console.log('Data loaded and processed for clustering.');
+        console.log('Data loaded and processed for clustering from data-2.json.');
         console.log('Formatted points:', points.length);
-        console.log('Available diseases:', availableDiseases);
-        console.log('Disease counts:', diseaseCountMap);
+        console.log('Available classifications for filtering:', availableClassifications);
+        console.log('Classification counts:', classificationCountMap);
         console.log('Cluster index created:', index);
 
       } catch (err) {
@@ -223,13 +213,14 @@ export function useData() {
       return;
     }
     
-    // Filter data based on active disease filters
+    // Filter data based on active classification filters
     const filtered = testimonialData.filter(point => {
+      // point.properties.disease now holds the classification
       return activeFilters[point.properties.disease];
     });
-    
+
     setFilteredData(filtered);
-    
+
     // Create new cluster index with filtered data
     const index = new Supercluster({
       radius: 40,
@@ -241,15 +232,15 @@ export function useData() {
       index.load(filtered);
     }
     setFilteredClusterIndex(index);
-    
-    console.log(`Filtered to ${filtered.length} points based on disease filters`);
+
+    console.log(`Filtered to ${filtered.length} points based on classification filters`);
   }, [testimonialData, activeFilters]);
 
-  // Function to toggle a disease filter
-  const toggleDiseaseFilter = (disease, isActive) => {
+  // Function to toggle a classification filter (rename variable for clarity)
+  const toggleDiseaseFilter = (classification, isActive) => {
     setActiveFilters(prev => ({
       ...prev,
-      [disease]: isActive
+      [classification]: isActive // Key is the classification name
     }));
   };
 
@@ -264,6 +255,7 @@ export function useData() {
     filteredClusterIndex,
     diseaseTypes,
     activeFilters,
-    toggleDiseaseFilter
+    toggleDiseaseFilter,
+    classificationCounts // Return the counts
   };
 }
