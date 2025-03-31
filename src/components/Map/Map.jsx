@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { Map as ReactMapGLMap } from 'react-map-gl';
-import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import { ScatterplotLayer } from '@deck.gl/layers'; // TextLayer removed
+import { HeatmapLayer } from '@deck.gl/aggregation-layers'; // Import HeatmapLayer
 import { FlyToInterpolator } from '@deck.gl/core';
 import 'mapbox-gl/dist/mapbox-gl.css'; // Import Mapbox CSS
 import './Map.css';
@@ -31,14 +32,25 @@ const ICON_MAPPING = {
   marker: {x: 0, y: 0, width: 24, height: 24, mask: true}
 };
 
-function MapComponent({ filteredClusterIndex, activeFilters }) {
+// Heatmap Color Range (Example: Blue to Red)
+const HEATMAP_COLOR_RANGE = [
+  [1, 152, 189],
+  [73, 227, 206],
+  [216, 254, 181],
+  [254, 237, 177],
+  [254, 173, 84],
+  [209, 55, 78]
+];
+
+function MapComponent({ filteredData, activeFilters }) { // Use filteredData, remove filteredClusterIndex
   const [viewState, setViewState] = useState({
     ...INITIAL_VIEW_STATE,
     transitionDuration: 2000, // Initial animation
     transitionInterpolator: new FlyToInterpolator(),
     transitionEasing: t => t * (2 - t)
   });
-  const [clusteredData, setClusteredData] = useState([]);
+  const [animationTime, setAnimationTime] = useState(0); // State for animation
+  // const [clusteredData, setClusteredData] = useState([]); // No longer using clustered data directly for heatmap
   const [testimonialState, setTestimonialState] = useState({
     data: null,
     position: null,
@@ -57,28 +69,28 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
 
   // Debug information
   console.log("Map received active filters:", activeFilters);
-  console.log("Map received filteredClusterIndex:", filteredClusterIndex);
+  console.log("Map received filteredData count:", filteredData?.length);
 
-  // Update clusters when viewport changes or clusterIndex is available
-  useEffect(() => {
-    if (filteredClusterIndex && viewState) {
-      const zoom = Math.floor(viewState.zoom);
-      try {
-        const clusters = filteredClusterIndex.getClusters(
-          [-180, -85, 180, 85], // World bounds as bbox
-          zoom
-        );
-        console.log(`Generated ${clusters.length} clusters at zoom level ${zoom}.`);
-        setClusteredData(clusters);
-      } catch (error) {
-        console.error("Error generating clusters:", error);
-        setClusteredData([]);
-      }
-    } else {
-      // Clear data if filteredClusterIndex is not available
-      setClusteredData([]);
-    }
-  }, [filteredClusterIndex, viewState?.zoom, activeFilters]);
+  // // Update clusters when viewport changes or clusterIndex is available - REMOVED as we use raw data now
+  // useEffect(() => {
+  //   if (filteredClusterIndex && viewState) {
+  //     const zoom = Math.floor(viewState.zoom);
+  //     try {
+  //       const clusters = filteredClusterIndex.getClusters(
+  //         [-180, -85, 180, 85], // World bounds as bbox
+  //         zoom
+  //       );
+  //       console.log(`Generated ${clusters.length} clusters at zoom level ${zoom}.`);
+  //       setClusteredData(clusters);
+  //     } catch (error) {
+  //       console.error("Error generating clusters:", error);
+  //       setClusteredData([]);
+  //     }
+  //   } else {
+  //     // Clear data if filteredClusterIndex is not available
+  //     setClusteredData([]);
+  //   }
+  // }, [filteredClusterIndex, viewState?.zoom, activeFilters]);
   
   // Cleanup function for hover timeouts
   useEffect(() => {
@@ -87,6 +99,17 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
         clearTimeout(hoverTimeoutRef.current);
       }
     };
+  }, []);
+
+  // Animation loop for heatmap intensity
+  useEffect(() => {
+    let animationFrameId;
+    const animate = () => {
+      setAnimationTime(Date.now());
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animate(); // Start the animation
+    return () => cancelAnimationFrame(animationFrameId); // Cleanup on unmount
   }, []);
 
   // Handle click on a testimonial to show the full testimonial
@@ -111,10 +134,40 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
       return;
     }
     
-    // If it's a cluster, zoom in
-    if (info.object.properties.cluster) {
-      // Clear any testimonial
-      setTestimonialState({
+    // If it's a cluster (ScatterplotLayer point), show testimonial
+    // HeatmapLayer is not pickable by default, so this mainly applies if we keep the individual points layer
+    if (info.layer.id === 'testimonials' && !info.object.properties.cluster) {
+       // Show testimonial regardless of zoom level
+       const testimonialData = {
+         ...info.object.properties,
+         coordinates: info.object.geometry.coordinates
+       };
+       console.log('Clicked on testimonial:', testimonialData);
+       
+       // Always use the mouse position for initial positioning
+       const position = { x: info.x, y: info.y };
+       
+       // Display the full testimonial with a new unique ID to force re-render
+       isTransitioningRef.current = true;
+       setTestimonialState({
+         data: testimonialData,
+         position: position,
+         coordinates: testimonialData.coordinates,
+         isPreview: false,
+         mode: 'full',
+         uniqueId: `full-${Date.now()}`,
+         isAtEdge: false,
+         edgeDirection: null
+       });
+       
+       // Clear transitioning flag after animation completes
+       setTimeout(() => {
+         isTransitioningRef.current = false;
+       }, 300);
+
+    } else {
+       // Click was likely on the heatmap or empty space, clear testimonial
+       setTestimonialState({
         data: null,
         position: null,
         coordinates: null,
@@ -124,56 +177,9 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
         isAtEdge: false,
         edgeDirection: null
       });
-      
-      const clusterId = info.object.properties.cluster_id;
-      const [longitude, latitude] = info.object.geometry.coordinates;
-      
-      // Get the cluster expansion zoom level
-      const expansionZoom = Math.min(
-        filteredClusterIndex.getClusterExpansionZoom(clusterId),
-        20 // Max zoom level
-      );
-      
-      // Use FlyToInterpolator for smooth animation
-      setViewState({
-        ...viewState,
-        longitude,
-        latitude,
-        zoom: expansionZoom,
-        transitionDuration: 1000, // Duration in milliseconds (1 second)
-        transitionInterpolator: new FlyToInterpolator(),
-        transitionEasing: t => t * (2 - t) // Ease out function for smoother effect
-      });
-    } else {
-      // Show testimonial regardless of zoom level
-      const testimonialData = {
-        ...info.object.properties,
-        coordinates: info.object.geometry.coordinates
-      };
-      console.log('Clicked on testimonial:', testimonialData);
-      
-      // Always use the mouse position for initial positioning
-      const position = { x: info.x, y: info.y };
-      
-      // Display the full testimonial with a new unique ID to force re-render
-      isTransitioningRef.current = true;
-      setTestimonialState({
-        data: testimonialData,
-        position: position,
-        coordinates: testimonialData.coordinates,
-        isPreview: false,
-        mode: 'full',
-        uniqueId: `full-${Date.now()}`,
-        isAtEdge: false,
-        edgeDirection: null
-      });
-      
-      // Clear transitioning flag after animation completes
-      setTimeout(() => {
-        isTransitioningRef.current = false;
-      }, 300);
     }
   };
+
 
   // Update testimonial position when map moves
   useEffect(() => {
@@ -237,22 +243,22 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
     }
   };
 
-  // Handle hover events
-  const handleHover = (info) => {
+  // Handle hover events (simplified as heatmap doesn't provide object info)
+  const handleHover = () => { // Removed 'info' parameter
     // We still need to clear any existing hover timeout for cleanup
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
     
-    // Clear any previous hover states on all objects
-    clusteredData.forEach(d => {
-      if (d.hoveredObject) {
-        d.hoveredObject = false;
-      }
-    });
+    // // Clear any previous hover states on all objects - Not needed for heatmap
+    // clusteredData.forEach(d => {
+    //   if (d.hoveredObject) {
+    //     d.hoveredObject = false;
+    //   }
+    // });
     
-    // If there's an active hover testimonial showing, clear it
+    // If there's an active hover testimonial showing, clear it (if we keep individual points)
     if (testimonialState.mode === 'hover') {
       setTestimonialState({
         data: null,
@@ -266,170 +272,80 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
       });
     }
     
-    // Set hover state on the current object if there is one
-    if (info.object) {
-      info.object.hoveredObject = true;
-    }
+    // // Set hover state on the current object if there is one - Not applicable to heatmap
+    // if (info.object) {
+    //   info.object.hoveredObject = true;
+    // }
   };
 
-  // Determine if we should show clusters or individual points based on zoom level
-  const showDetailedView = viewState.zoom >= ZOOM_THRESHOLD;
+  // // Determine if we should show clusters or individual points based on zoom level - Not applicable for heatmap
+  // const showDetailedView = viewState.zoom >= ZOOM_THRESHOLD;
 
   const layers = useMemo(() => {
-    console.log("Rebuilding layers with clusteredData length:", clusteredData.length);
-    // Base cluster layer - shown at lower zoom levels
-    const clusterLayer = new ScatterplotLayer({
-      id: 'clusters',
-      data: clusteredData.filter(d => d.properties.cluster),
-      pickable: true,
-      stroked: true,
-      filled: true,
-      radiusScale: 6,
-      radiusMinPixels: POINT_SIZES.CLUSTER.MIN_PIXELS,
-      radiusMaxPixels: POINT_SIZES.CLUSTER.MAX_PIXELS,
-      lineWidthMinPixels: 2,
+    console.log("Rebuilding layers with filteredData length:", filteredData?.length);
+    
+    if (!filteredData) {
+      return []; // Return empty array if data is not ready
+    }
+
+    // Heatmap Layer using the raw filtered points
+    const heatmapLayer = new HeatmapLayer({
+      id: 'heatmap',
+      data: filteredData,
       getPosition: d => d.geometry.coordinates,
-      getRadius: d => {
-        // Size based on the number of points in the cluster
-        // Enhanced sizing to better show the count text
-        if (d.properties.cluster) {
-          const count = d.properties.point_count;
-          const logFactor = Math.log10(count + 1) * 1.5;
-          
-          // If hovered, slightly increase the size
-          const hoverMultiplier = d.hoveredObject ? 1.1 : 1.0;
-          
-          return Math.min(
-            (POINT_SIZES.CLUSTER.BASE + (count * 500 * logFactor)) * hoverMultiplier, 
-            60000
-          );
-        }
-        return POINT_SIZES.CLUSTER.BASE;
-      },
-      getFillColor: d => {
-        // Slightly adjust opacity based on count for visual differentiation
-        const baseAlpha = Math.min(180 + (d.properties.point_count || 0), 230);
-        
-        // If hovered, make the cluster more vibrant
-        const alpha = d.hoveredObject ? Math.min(baseAlpha + 25, 255) : baseAlpha;
-        const blueShift = d.hoveredObject ? 20 : 0; // Slight color shift on hover
-        
-        return [41, 121 + blueShift, 255, alpha]; // Blue for all clusters with dynamic opacity
-      },
-      getLineColor: d => {
-        // Brighter border on hover
-        return d.hoveredObject ? [255, 255, 255, 255] : [255, 255, 255, 200];
-      },
-      getLineWidth: d => {
-        // Thicker border on hover
-        return d.hoveredObject ? 3 : 2;
-      },
-      onClick: handleClick,
-      onHover: info => {
-        // Mark the object as hovered for visual feedback
-        if (info.object) {
-          info.object.hoveredObject = true;
-        }
-        handleHover(info);
-      },
-      updateTriggers: {
-        getFillColor: [activeFilters, 'hoveredObject'],
-        getRadius: [clusteredData, 'hoveredObject'],
-        getLineColor: ['hoveredObject'],
-        getLineWidth: ['hoveredObject']
-      }
+      getWeight: 1, // Each point contributes equally
+      radiusPixels: 60, // Adjust for desired smoothness/spread
+      // Animate intensity slightly
+      intensity: 1 + Math.sin(animationTime * 0.0005) * 0.3, // Base intensity + oscillation
+      threshold: 0.05, // Adjust density threshold
+      colorRange: HEATMAP_COLOR_RANGE,
+      // Optional: Debounce updates for performance on rapid filtering
+      debounceTimeout: 50,
+      aggregation: 'SUM' // Use SUM aggregation
     });
 
-    // Text layer to show count number inside clusters
-    const clusterCountLayer = new TextLayer({
-      id: 'cluster-counts',
-      data: clusteredData.filter(d => d.properties.cluster),
-      pickable: false,
-      getPosition: d => d.geometry.coordinates,
-      getText: d => d.properties.point_count.toString(),
-      getSize: d => {
-        // Adjusting text size based on count for better readability
-        const count = d.properties.point_count;
-        const digitCount = count.toString().length;
-        
-        // Base size that grows with digit count but not too large
-        let size = 16;
-        
-        // Larger clusters need larger text, but with diminishing returns
-        if (digitCount === 1) {
-          size = 16; // Single digit
-        } else if (digitCount === 2) {
-          size = 18; // Double digits
-        } else if (digitCount === 3) {
-          size = 20; // Triple digits
-        } else {
-          size = 22; // Very large numbers
-        }
-        
-        // Increase size slightly on hover
-        if (d.hoveredObject) {
-          size += 2;
-        }
-        
-        return size;
-      },
-      getColor: d => {
-        // Enhance text color on hover
-        return d.hoveredObject ? [255, 255, 255, 255] : [255, 255, 255, 240];
-      },
-      getAngle: 0,
-      getTextAnchor: 'middle',
-      getAlignmentBaseline: 'center',
-      fontFamily: 'Arial, sans-serif',
-      fontWeight: 'bold',
-      // Add a subtle shadow for better readability
-      outlineWidth: d => d.hoveredObject ? 5 : 4,
-      outlineColor: [0, 0, 0, 150],
-      // Additional styling
-      fontSettings: {
-        sdf: true,
-        fontSize: 24,
-        buffer: 6
-      },
-      updateTriggers: {
-        getSize: ['hoveredObject'],
-        getColor: ['hoveredObject'],
-        outlineWidth: ['hoveredObject']
-      }
-    });
-
-    // Individual testimonial layer - speech bubbles with color coding by disease
+    // Individual testimonial layer - Keep for now, but might be obscured by heatmap
+    // Consider making this visible only at higher zoom levels if kept
     const testimonialLayer = new ScatterplotLayer({
       id: 'testimonials',
-      data: clusteredData.filter(d => !d.properties.cluster),
-      pickable: true,
-      stroked: true,
+      // data: clusteredData.filter(d => !d.properties.cluster), // Use filteredData directly
+      data: filteredData, // Use the raw filtered points
+      pickable: true, // Always pickable
+      visible: true, // Always technically visible
+      opacity: viewState.zoom >= 6 ? 0.8 : 0.05, // Low opacity when zoomed out, higher when zoomed in
+      stroked: viewState.zoom >= 6, // Only stroke when clearly visible
       filled: true,
-      radiusScale: 6,
-      radiusMinPixels: POINT_SIZES.INDIVIDUAL.MIN_PIXELS,
-      radiusMaxPixels: POINT_SIZES.INDIVIDUAL.MAX_PIXELS,
+      radiusScale: 1, // Use radius in pixels directly
+      // Adjust radius based on zoom - Further increased zoomed-out size
+      radiusMinPixels: viewState.zoom >= 6 ? POINT_SIZES.INDIVIDUAL.MIN_PIXELS : 6, // Increased from 4
+      radiusMaxPixels: viewState.zoom >= 6 ? POINT_SIZES.INDIVIDUAL.MAX_PIXELS : 7, // Increased from 5
       lineWidthMinPixels: 1,
       getPosition: d => d.geometry.coordinates,
-      getRadius: () => POINT_SIZES.INDIVIDUAL.BASE,
-      getFillColor: d => getDiseaseColor(d.properties.disease),
+      // Use getRadius for dynamic sizing based on zoom
+      getRadius: viewState.zoom >= 6 ? POINT_SIZES.INDIVIDUAL.BASE : 6, // Increased from 4
+      // getRadius: () => POINT_SIZES.INDIVIDUAL.BASE, // REMOVED duplicate static radius
+      getFillColor: d => getDiseaseColor(d.properties.disease), // Color by disease
       getLineColor: [255, 255, 255],
       getLineWidth: 1,
-      onClick: handleClick,
-      onHover: handleHover,
+      onClick: handleClick, // Allow clicking to show testimonial
+      onHover: handleHover, // Basic hover handling (might not be needed)
       updateTriggers: {
-        getFillColor: [activeFilters]
+        getFillColor: [activeFilters],
+        // visible: [viewState.zoom], // No longer needed as always visible
+        opacity: [viewState.zoom], // Trigger opacity update on zoom change
+        getRadius: [viewState.zoom], // Trigger radius update on zoom change
+        stroked: [viewState.zoom]
+      },
+      transitions: {
+         opacity: 300, // Smooth fade transition
+         getRadius: 300 // Smooth radius transition
       }
     });
 
-    // Decide which layers to show based on zoom level
-    if (showDetailedView) {
-      // At higher zoom levels, show individual points and any remaining clusters
-      return [clusterLayer, clusterCountLayer, testimonialLayer];
-    } else {
-      // At lower zoom levels, primarily show clusters and their counts
-      return [clusterLayer, clusterCountLayer, testimonialLayer];
-    }
-  }, [clusteredData, activeFilters, showDetailedView, handleClick, handleHover]);
+    // Return the heatmap layer and potentially the testimonial layer
+    return [heatmapLayer, testimonialLayer];
+
+  }, [filteredData, activeFilters, viewState.zoom, handleClick, handleHover, animationTime]); // Add animationTime dependency
 
   return (
     <div className="map-container">
@@ -445,36 +361,21 @@ function MapComponent({ filteredClusterIndex, activeFilters }) {
           isHovering ? 'pointer' : isDragging ? 'grabbing' : 'grab'
         }
         ref={deckRef}
-        getTooltip={({object}) => {
-          if (!object) return null;
+        getTooltip={({object, layer}) => { // Check layer ID
+          if (!object || !layer) return null;
           
-          // For clusters, show the count and any filter information
-          if (object.properties.cluster) {
-            const count = object.properties.point_count;
-            return {
-              html: `
-                <div>
-                  <strong>${count} testimonial${count !== 1 ? 's' : ''}</strong>
-                  <div style="font-size: 12px; margin-top: 4px;">Click to explore</div>
-                </div>
-              `,
-              style: {
-                backgroundColor: 'rgba(30, 40, 50, 0.9)',
-                color: 'white',
-                fontSize: '14px',
-                padding: '8px 12px',
-                borderRadius: '4px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
-                fontFamily: 'Arial, sans-serif'
-              }
-            };
+          // Tooltip only for individual testimonial points when visible
+          if (layer.id === 'testimonials' && !object.properties.cluster) {
+             // Maybe show disease name on hover? Or nothing?
+             // For now, disable tooltip for individual points as well, click shows full testimonial
+             return null; 
+            // return {
+            //   text: `${object.properties.disease}`,
+            //   style: { /* Optional styling */ }
+            // };
           }
-          // For individual testimonials, do not show a hover tooltip
-          if (!object.properties.cluster) {
-            return null; // Return null to disable tooltip for individual points
-          }
-
-          // Return null by default if neither cluster nor individual point logic applies (shouldn't happen)
+          
+          // No tooltip for heatmap layer
           return null;
         }}
       >
